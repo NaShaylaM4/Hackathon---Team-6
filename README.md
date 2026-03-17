@@ -1,4 +1,5 @@
 # Hackathon---Team-6
+# Team Member- Anderson Peterkin, Montrell Spears, McCall Johnson, Na’Shayla McIntosh,Adrian Cortez, Azaevion Neal
 # My Buggy
 
 ### Your Friendly Grocery AI Budgeting Assistant
