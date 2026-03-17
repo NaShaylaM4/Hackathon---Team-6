@@ -15,6 +15,58 @@ enum PaymentMethod: String, CaseIterable, Identifiable {
     case ebt = "EBT"
     
     var id: String { self.rawValue }
+    
+    var icon: String {
+        switch self {
+        case .visa: return "creditcard.fill"
+        case .credit: return "banknote.fill"
+        case .ebt: return "leaf.fill"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .visa: return .blue
+        case .credit: return .purple
+        case .ebt: return .green
+        }
+    }
+}
+struct PaymentCardView: View {
+    let method: PaymentMethod
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack {
+            Image(systemName: method.icon)
+                .font(.title2)
+                .foregroundColor(.white)
+                .padding(10)
+                .background(method.color)
+                .clipShape(Circle())
+            
+            Text(method.rawValue)
+                .foregroundColor(.white)
+                .fontWeight(.semibold)
+            
+            Spacer()
+            
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.title2)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isSelected ? Color.green.opacity(0.3) : Color.white.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isSelected ? Color.green : Color.clear, lineWidth: 2)
+        )
+    }
 }
 
 struct Purchase: Identifiable {
@@ -68,7 +120,6 @@ class BudgetViewModel: ObservableObject {
         return spent >= budget * 0.8
     }
     
-    //  Monthly Spending Function
     func monthlySpending() -> Double {
         let calendar = Calendar.current
         let now = Date()
@@ -88,109 +139,152 @@ struct ContentView: View {
         TabView {
             
             // Dashboard
-            VStack(spacing: 20) {
-                Text("Budget: $\(vm.budget, specifier: "%.2f")")
-                Text("Spent: $\(vm.spent, specifier: "%.2f")")
-                Text("Remaining: $\(vm.budgetRemaining(), specifier: "%.2f")")
+            ZStack {
+                Color.black.ignoresSafeArea()
                 
-                if vm.isNearLimit() {
-                    Text("Limt Reached")
-                        .foregroundColor(.red)
+                VStack(spacing: 20) {
+                    
+                    Text("My Buggy")
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.white)
+                        .padding(.bottom)
+                    
+                    Text("Budget: $\(vm.budget, specifier: "%.2f")")
+                        .foregroundColor(.white)
+                    Text("Spent: $\(vm.spent, specifier: "%.2f")")
+                        .foregroundColor(.white)
+                    Text("Remaining: $\(vm.budgetRemaining(), specifier: "%.2f")")
+                        .foregroundColor(.green)
+                    
+                    if vm.isNearLimit() {
+                        Text("Limit Reached")
+                            .foregroundColor(.red)
+                    }
                 }
+                .padding()
             }
-            .padding()
             .tabItem {
                 Label("Dashboard", systemImage: "chart.pie")
             }
             
             
             // Grocery List
-            VStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
                 
-                Text("Quick Add")
-                    .font(.headline)
-                
-                ForEach(vm.defaultItems) { item in
-                    Button(action: {
-                        vm.addItem(item)
-                    }) {
+                VStack {
+                    
+                    Text("Quick Add")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    ForEach(vm.defaultItems) { item in
+                        Button(action: {
+                            vm.addItem(item)
+                        }) {
+                            HStack {
+                                Image(systemName: "cart.fill")
+                                    .font(.largeTitle)
+                                    .foregroundColor(.white)
+                                Text(item.name)
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Text("$\(item.price, specifier: "%.2f")")
+                                    .foregroundColor(.white)
+                            }
+                            .padding()
+                            .background(Color.white.opacity(0.3))
+                            .cornerRadius(10)
+                        }
+                    }
+                    
+                    Divider().background(Color.white)
+                    
+                    List(vm.groceryList) { item in
                         HStack {
-                            Image(systemName: "cart.fill")
-                                .font(.largeTitle)
                             Text(item.name)
+                                .foregroundColor(.white)
                             Spacer()
                             Text("$\(item.price, specifier: "%.2f")")
+                                .foregroundColor(.white)
                         }
+                        .listRowBackground(Color.gray.opacity(0.4))
+                    }
+                    .scrollContentBackground(.hidden)
+                    
+                    Text("Total: $\(vm.groceryList.reduce(0.0) { $0 + $1.price }, specifier: "%.2f")")
+                        .font(.headline)
+                        .foregroundColor(.green)
                         .padding()
-                        .background(Color.gray.opacity(0.2))
-                        .cornerRadius(10)
+
+                    Text("Select Payment Method")
+                        .foregroundColor(.white)
+                        .font(.headline)
+
+                    VStack(spacing: 12) {
+                        ForEach(PaymentMethod.allCases) { method in
+                            Button {
+                                vm.selectedPayment = method
+                            } label: {
+                                PaymentCardView(
+                                    method: method,
+                                    isSelected: vm.selectedPayment == method
+                                )
+                            }
+                        }
                     }
-                }
-                
-                Divider()
-                
-                List(vm.groceryList) { item in
-                    HStack {
-                        Text(item.name)
-                        Spacer()
-                        Text("$\(item.price, specifier: "%.2f")")
+                    .padding(.vertical)
+                    
+                    Button("Checkout") {
+                        vm.completePurchase()
                     }
-                }
-                
-                Text("Total: $\(vm.groceryList.reduce(0.0) { $0 + $1.price }, specifier: "%.2f")")
-                    .font(.headline)
                     .padding()
-                
-                // Payment Picker
-                Text("Select Payment Method")
-                    .font(.headline)
-                
-                Picker("Payment", selection: $vm.selectedPayment) {
-                    ForEach(PaymentMethod.allCases) { method in
-                        Text(method.rawValue).tag(method)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding()
-                
-                Button("Checkout") {
-                    vm.completePurchase()
                 }
                 .padding()
             }
-            .padding()
             .tabItem {
                 Label("Shop", systemImage: "cart.fill")
             }
             
             
             // History
-            VStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
                 
-                //  Monthly Spending Header
                 VStack {
-                    Text("This Month")
-                        .font(.headline)
                     
-                    Text("$\(vm.monthlySpending(), specifier: "%.2f")")
-                        .font(.largeTitle)
-                        .bold()
-                        .foregroundColor(.green)
-                }
-                .padding()
-                
-                List(vm.purchases) { purchase in
-                    VStack(alignment: .leading) {
+                    VStack {
+                        Text("This Month")
+                            .font(.headline)
+                            .foregroundColor(.white)
                         
-                        Text("Items: \(purchase.items.map { $0.name }.joined(separator: ", "))")
-                        
-                        Text("Total: $\(purchase.total, specifier: "%.2f")")
-                        
-                        Text("Payment: \(purchase.paymentMethod.rawValue)")
-                        
-                        Text("Date: \(purchase.date.formatted())")
-                            .font(.caption)
+                        Text("$\(vm.monthlySpending(), specifier: "%.2f")")
+                            .font(.largeTitle)
+                            .bold()
+                            .foregroundColor(.green)
                     }
+                    .padding()
+                    
+                    List(vm.purchases) { purchase in
+                        VStack(alignment: .leading) {
+                            
+                            Text("Items: \(purchase.items.map { $0.name }.joined(separator: ", "))")
+                                .foregroundColor(.white)
+                            
+                            Text("Total: $\(purchase.total, specifier: "%.2f")")
+                                .foregroundColor(.green)
+                            
+                            Text("Payment: \(purchase.paymentMethod.rawValue)")
+                                .foregroundColor(.white)
+                            
+                            Text("Date: \(purchase.date.formatted())")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        .listRowBackground(Color.gray.opacity(0.3))
+                    }
+                    .scrollContentBackground(.hidden)
                 }
             }
             .tabItem {
@@ -199,3 +293,4 @@ struct ContentView: View {
         }
     }
 }
+
