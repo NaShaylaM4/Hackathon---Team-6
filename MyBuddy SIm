@@ -1,0 +1,201 @@
+import SwiftUI
+import Combine
+
+// MARK: - Models
+struct GroceryItem: Identifiable {
+    let id = UUID()
+    var name: String
+    var price: Double
+}
+
+// Payment Method Enum
+enum PaymentMethod: String, CaseIterable, Identifiable {
+    case visa = "Visa"
+    case credit = "Credit Card"
+    case ebt = "EBT"
+    
+    var id: String { self.rawValue }
+}
+
+struct Purchase: Identifiable {
+    let id = UUID()
+    var items: [GroceryItem]
+    var total: Double
+    var date: Date
+    var paymentMethod: PaymentMethod
+}
+
+// MARK: - ViewModel
+class BudgetViewModel: ObservableObject {
+    
+    @Published var budget: Double = 100.0
+    @Published var spent: Double = 0.0
+    @Published var groceryList: [GroceryItem] = []
+    @Published var purchases: [Purchase] = []
+    
+    @Published var selectedPayment: PaymentMethod = .visa
+    
+    let defaultItems: [GroceryItem] = [
+        GroceryItem(name: "Eggs", price: 2.50),
+        GroceryItem(name: "Milk", price: 3.00),
+        GroceryItem(name: "Bread", price: 2.00)
+    ]
+    
+    func addItem(_ item: GroceryItem) {
+        groceryList.append(item)
+        spent += item.price
+    }
+    
+    func completePurchase() {
+        let total = groceryList.reduce(0.0) { $0 + $1.price }
+        
+        let purchase = Purchase(
+            items: groceryList,
+            total: total,
+            date: Date(),
+            paymentMethod: selectedPayment
+        )
+        
+        purchases.append(purchase)
+        groceryList.removeAll()
+    }
+    
+    func budgetRemaining() -> Double {
+        return max(budget - spent, 0.0)
+    }
+    
+    func isNearLimit() -> Bool {
+        return spent >= budget * 0.8
+    }
+    
+    //  Monthly Spending Function
+    func monthlySpending() -> Double {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        return purchases
+            .filter { calendar.isDate($0.date, equalTo: now, toGranularity: .month) }
+            .reduce(0.0) { $0 + $1.total }
+    }
+}
+
+// MARK: - Main View
+struct ContentView: View {
+    
+    @StateObject var vm = BudgetViewModel()
+    
+    var body: some View {
+        TabView {
+            
+            // Dashboard
+            VStack(spacing: 20) {
+                Text("Budget: $\(vm.budget, specifier: "%.2f")")
+                Text("Spent: $\(vm.spent, specifier: "%.2f")")
+                Text("Remaining: $\(vm.budgetRemaining(), specifier: "%.2f")")
+                
+                if vm.isNearLimit() {
+                    Text("Limt Reached")
+                        .foregroundColor(.red)
+                }
+            }
+            .padding()
+            .tabItem {
+                Label("Dashboard", systemImage: "chart.pie")
+            }
+            
+            
+            // Grocery List
+            VStack {
+                
+                Text("Quick Add")
+                    .font(.headline)
+                
+                ForEach(vm.defaultItems) { item in
+                    Button(action: {
+                        vm.addItem(item)
+                    }) {
+                        HStack {
+                            Image(systemName: "cart.fill")
+                                .font(.largeTitle)
+                            Text(item.name)
+                            Spacer()
+                            Text("$\(item.price, specifier: "%.2f")")
+                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(10)
+                    }
+                }
+                
+                Divider()
+                
+                List(vm.groceryList) { item in
+                    HStack {
+                        Text(item.name)
+                        Spacer()
+                        Text("$\(item.price, specifier: "%.2f")")
+                    }
+                }
+                
+                Text("Total: $\(vm.groceryList.reduce(0.0) { $0 + $1.price }, specifier: "%.2f")")
+                    .font(.headline)
+                    .padding()
+                
+                // Payment Picker
+                Text("Select Payment Method")
+                    .font(.headline)
+                
+                Picker("Payment", selection: $vm.selectedPayment) {
+                    ForEach(PaymentMethod.allCases) { method in
+                        Text(method.rawValue).tag(method)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                Button("Checkout") {
+                    vm.completePurchase()
+                }
+                .padding()
+            }
+            .padding()
+            .tabItem {
+                Label("Shop", systemImage: "cart.fill")
+            }
+            
+            
+            // History
+            VStack {
+                
+                //  Monthly Spending Header
+                VStack {
+                    Text("This Month")
+                        .font(.headline)
+                    
+                    Text("$\(vm.monthlySpending(), specifier: "%.2f")")
+                        .font(.largeTitle)
+                        .bold()
+                        .foregroundColor(.green)
+                }
+                .padding()
+                
+                List(vm.purchases) { purchase in
+                    VStack(alignment: .leading) {
+                        
+                        Text("Items: \(purchase.items.map { $0.name }.joined(separator: ", "))")
+                        
+                        Text("Total: $\(purchase.total, specifier: "%.2f")")
+                        
+                        Text("Payment: \(purchase.paymentMethod.rawValue)")
+                        
+                        Text("Date: \(purchase.date.formatted())")
+                            .font(.caption)
+                    }
+                }
+            }
+            .tabItem {
+                Label("History", systemImage: "clock")
+            }
+        }
+    }
+}
